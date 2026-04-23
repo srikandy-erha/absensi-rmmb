@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EduAbsen - Hybrid Auth Edition</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
+    <style>
+        body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; font-family: 'Inter', sans-serif; }
+        #app-shell { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #f8fafc; z-index: 9999; overflow-y: auto; }
+        .app-container { max-width: 500px; margin: 0 auto; min-height: 100vh; background: #f8fafc; display: flex; flex-direction: column; position: relative; }
+        .bottom-nav { position: sticky; bottom: 0; width: 100%; background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(10px); border-top: 1px solid #e2e8f0; display: flex; justify-content: space-around; padding: 12px 0; z-index: 50; }
+        .nav-item { display: flex; flex-direction: column; align-items: center; font-size: 0.7rem; color: #94a3b8; cursor: pointer; transition: all 0.3s; }
+        .nav-item.active { color: #2563eb; transform: translateY(-2px); }
+        .hidden { display: none; }
+        .camera-box { width: 100%; aspect-ratio: 1/1; background: #000; border-radius: 24px; overflow: hidden; position: relative; box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1); }
+        video { width: 100%; height: 100%; object-fit: cover; }
+        canvas { display: none; }
+        .status-badge { padding: 4px 12px; border-radius: 99px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; }
+        
+        /* Animasi Transisi */
+        .fade-in { animation: fadeIn 0.4s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body>
+
+<div id="app-shell">
+    <div class="app-container">
+        <!-- LOADING OVERLAY -->
+        <div id="loader" class="fixed inset-0 bg-white z-[100000] flex flex-col items-center justify-center space-y-4">
+            <div class="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+            <p class="text-xs font-bold text-slate-400 animate-pulse uppercase tracking-widest">Sinkronisasi Keamanan...</p>
+        </div>
+
+        <!-- HEADER -->
+        <header id="header-app" class="bg-blue-600 text-white p-5 flex justify-between items-center hidden shadow-lg">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-inner">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M12 2L3 7V17L12 22L21 17V7L12 2Z" fill="#2563eb"/></svg>
+                </div>
+                <div>
+                    <h1 class="text-sm font-black tracking-tight leading-none">EduAbsen</h1>
+                    <p id="user-display-name" class="text-[10px] opacity-70 font-medium truncate max-w-[120px]">Memuat...</p>
+                </div>
+            </div>
+            <div class="flex items-center space-x-2">
+                <div id="sync-indicator" class="w-2 h-2 rounded-full bg-emerald-400"></div>
+                <button onclick="handleLogout()" class="text-[10px] font-black bg-blue-700 px-3 py-2 rounded-lg">LOGOUT</button>
+            </div>
+        </header>
+
+        <main id="main-content" class="flex-1 p-5 pb-24">
+            
+            <!-- VIEW: LOGIN -->
+            <section id="view-login" class="flex flex-col justify-center items-center min-h-[85vh] space-y-8 fade-in">
+                <div class="text-center">
+                    <div class="w-20 h-20 bg-white rounded-3xl flex items-center justify-center mx-auto mb-4 shadow-xl border border-blue-50">
+                        <svg width="40" height="40" viewBox="0 0 24 24" fill="none"><path d="M12 2L3 7V17L12 22L21 17V7L12 2Z" fill="#2563eb"/></svg>
+                    </div>
+                    <h2 class="text-2xl font-black text-slate-800 tracking-tight">Hybrid Login</h2>
+                    <p class="text-slate-400 text-xs mt-1 font-medium">Password • FaceID • Fingerprint</p>
+                </div>
+
+                <div class="w-full max-w-sm space-y-4">
+                    <div class="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 space-y-4">
+                        <div class="space-y-1">
+                            <label class="text-[10px] font-black text-slate-400 ml-1 uppercase">ID Karyawan</label>
+                            <input type="text" id="login-user" class="w-full p-4 rounded-2xl border border-slate-100 bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none text-sm font-bold" placeholder="Masukkan ID">
+                        </div>
+                        <div class="space-y-1">
+                            <label class="text-[10px] font-black text-slate-400 ml-1 uppercase">Kata Sandi</label>
+                            <input type="password" id="login-pass" class="w-full p-4 rounded-2xl border border-slate-100 bg-slate-50 focus:ring-2 focus:ring-blue-500 outline-none text-sm font-bold" placeholder="••••••••">
+                        </div>
+                        <button onclick="processLogin()" class="w-full bg-blue-600 text-white py-4 rounded-2xl font-black shadow-lg shadow-blue-200 active:scale-95 transition-all">MASUK</button>
+                    </div>
+                    
+                    <div class="flex items-center space-x-4 px-2">
+                        <div class="flex-1 h-px bg-slate-200"></div>
+                        <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Atau Gunakan Biometrik</span>
+                        <div class="flex-1 h-px bg-slate-200"></div>
+                    </div>
+
+                    <button onclick="loginWithBiometrics()" id="btn-biometric-login" class="w-full bg-white border-2 border-slate-100 text-slate-700 py-4 rounded-2xl font-black flex items-center justify-center space-x-3 hover:bg-slate-50 transition active:scale-95 shadow-sm">
+                        <i class="fas fa-fingerprint text-blue-600 text-xl"></i>
+                        <span>Scan Wajah / Jari</span>
+                    </button>
+                </div>
+            </section>
+
+            <!-- VIEW: DASHBOARD (Isi sama dengan sebelumnya namun dioptimasi) -->
+            <section id="view-dashboard" class="hidden space-y-6 fade-in">
+                <div class="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 flex justify-between items-end">
+                    <div>
+                        <p id="date-label" class="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-1">MEMUAT...</p>
+                        <h3 id="clock-label" class="text-4xl font-black text-slate-800 leading-none tracking-tighter">00:00</h3>
+                    </div>
+                    <div class="text-right">
+                        <span class="text-[10px] font-bold text-slate-400 block uppercase">Status</span>
+                        <span class="text-xs font-black text-emerald-500 uppercase flex items-center"><i class="fas fa-circle text-[6px] mr-1"></i> Terhubung</span>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm">
+                        <p class="text-[10px] font-bold text-slate-400 uppercase">Absen Masuk</p>
+                        <p id="dash-masuk" class="text-xl font-black text-slate-800 mt-1">--:--</p>
+                    </div>
+                    <div class="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm">
+                        <p class="text-[10px] font-bold text-slate-400 uppercase">Absen Pulang</p>
+                        <p id="dash-pulang" class="text-xl font-black text-slate-800 mt-1">--:--</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-3 gap-3">
+                    <button onclick="switchTab('absen')" class="bg-blue-600 text-white p-4 rounded-3xl shadow-lg shadow-blue-100 flex flex-col items-center">
+                        <i class="fas fa-camera mb-2"></i>
+                        <span class="text-[9px] font-black uppercase">Absen</span>
+                    </button>
+                    <button onclick="switchTab('riwayat')" class="bg-white text-slate-800 p-4 rounded-3xl border border-slate-100 flex flex-col items-center">
+                        <i class="fas fa-history mb-2 text-blue-600"></i>
+                        <span class="text-[9px] font-black uppercase">Riwayat</span>
+                    </button>
+                    <button onclick="switchTab('profil')" class="bg-white text-slate-800 p-4 rounded-3xl border border-slate-100 flex flex-col items-center">
+                        <i class="fas fa-user-shield mb-2 text-blue-600"></i>
+                        <span class="text-[9px] font-black uppercase">Keamanan</span>
+                    </button>
+                </div>
+            </section>
+
+            <!-- VIEW: ABSENSI -->
+            <section id="view-absen" class="hidden space-y-4 fade-in">
+                <div class="camera-box">
+                    <video id="video" autoplay playsinline></video>
+                </div>
+                <div class="bg-white p-5 rounded-3xl border border-slate-100 flex justify-between">
+                    <span id="gps-status" class="text-[10px] font-bold text-slate-400">MEMERIKSA LOKASI...</span>
+                    <span id="gps-dist" class="text-[10px] font-black text-blue-600 tracking-widest">-- METER</span>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <button id="btn-in" onclick="doAbsen('Masuk')" disabled class="bg-emerald-600 text-white py-4 rounded-2xl font-black opacity-30">ABSEN MASUK</button>
+                    <button id="btn-out" onclick="doAbsen('Pulang')" disabled class="bg-slate-800 text-white py-4 rounded-2xl font-black opacity-30">ABSEN PULANG</button>
+                </div>
+            </section>
+
+            <!-- VIEW: RIWAYAT -->
+            <section id="view-riwayat" class="hidden space-y-4 fade-in">
+                <h3 class="font-black text-slate-800 ml-1">Log Aktivitas</h3>
+                <div id="riwayat-list" class="space-y-3"></div>
+            </section>
+
+            <!-- VIEW: PROFILE & SECURITY -->
+            <section id="view-profil" class="hidden space-y-4 fade-in">
+                <div class="bg-white p-8 rounded-[2.5rem] text-center border border-slate-100 shadow-sm relative overflow-hidden">
+                    <div class="absolute top-0 right-0 w-24 h-24 bg-blue-50 rounded-full -mr-12 -mt-12"></div>
+                    <div class="w-20 h-20 bg-blue-100 rounded-full mx-auto mb-4 flex items-center justify-center text-blue-600 text-3xl">
+                        <i class="fas fa-user-shield"></i>
+                    </div>
+                    <h2 id="prof-nama" class="text-xl font-black text-slate-800">--</h2>
+                    <p id="prof-id" class="text-[10px] font-bold text-blue-600 uppercase tracking-widest mt-1">--</p>
+                </div>
+
+                <div class="bg-white p-6 rounded-[2rem] border border-slate-100 space-y-4">
+                    <h4 class="text-xs font-black text-slate-800 uppercase tracking-widest">Keamanan Biometrik</h4>
+                    <p class="text-[10px] text-slate-500 leading-relaxed font-medium">Daftarkan sidik jari atau wajah Anda untuk login lebih cepat tanpa password di perangkat ini.</p>
+                    
+                    <button onclick="registerBiometrics()" class="w-full bg-slate-50 text-blue-600 py-4 rounded-2xl font-black border border-blue-100 flex items-center justify-center space-x-2 active:scale-95 transition-all">
+                        <i class="fas fa-fingerprint"></i>
+                        <span>DAFTARKAN PERANGKAT</span>
+                    </button>
+                    
+                    <div id="biometric-status-ui" class="text-center">
+                        <span class="text-[9px] font-bold text-slate-400 italic">Status: Menunggu Pendaftaran</span>
+                    </div>
+                </div>
+
+                <button onclick="handleLogout()" class="w-full text-red-500 py-4 font-black text-[10px] uppercase tracking-widest">Hapus Sesi & Keluar</button>
+            </section>
+
+        </main>
+
+        <nav id="bottom-nav" class="bottom-nav hidden">
+            <div onclick="switchTab('dashboard')" class="nav-item active" data-tab="dashboard"><i class="fas fa-home-alt text-lg"></i><span class="font-bold mt-1">Home</span></div>
+            <div onclick="switchTab('absen')" class="nav-item" data-tab="absen"><i class="fas fa-camera text-lg"></i><span class="font-bold mt-1">Absen</span></div>
+            <div onclick="switchTab('riwayat')" class="nav-item" data-tab="riwayat"><i class="fas fa-history text-lg"></i><span class="font-bold mt-1">Log</span></div>
+            <div onclick="switchTab('profil')" class="nav-item" data-tab="profil"><i class="fas fa-shield-alt text-lg"></i><span class="font-bold mt-1">Secure</span></div>
+        </nav>
+    </div>
+</div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, collection, doc, setDoc, getDoc, onSnapshot, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    // --- INIT FIREBASE ---
+    const firebaseConfig = JSON.parse(__firebase_config);
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'edu-absen-hybrid';
+
+    let user = null;
+    let userData = null;
+    let officeLoc = { lat: -6.200000, lng: 106.816666, radius: 200 };
+    let videoStream = null;
+
+    // --- HYBRID AUTH CORE ---
+    
+    // 1. Registrasi Biometrik (Simpan 'Credential' ke Firestore Privat)
+    window.registerBiometrics = async () => {
+        if (!userData) return toast("Login dahulu");
+        
+        // Cek dukungan browser
+        if (!window.PublicKeyCredential) {
+            return toast("Perangkat tidak mendukung biometrik");
+        }
+
+        showLoader();
+        try {
+            // Simulasi tantangan (challenge) dari server
+            const challenge = new Uint8Array(32);
+            window.crypto.getRandomValues(challenge);
+
+            const createCredentialOptions = {
+                publicKey: {
+                    challenge: challenge,
+                    rp: { name: "EduAbsen", id: window.location.hostname || "localhost" },
+                    user: {
+                        id: Uint8Array.from(userData.uid, c => c.charCodeAt(0)),
+                        name: userData.uid,
+                        displayName: userData.nama
+                    },
+                    pubKeyCredParams: [{ alg: -7, type: "public-key" }, { alg: -257, type: "public-key" }],
+                    authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "required" },
+                    timeout: 60000,
+                    attestation: "none"
+                }
+            };
+
+            const credential = await navigator.credentials.create(createCredentialOptions);
+            
+            if (credential) {
+                // Simpan ID Kredensial ke Firestore User (Private Path Rule 1)
+                const credId = btoa(String.fromCharCode(...new Uint8Array(credential.rawId)));
+                await setDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'security', 'biometric'), {
+                    credentialId: credId,
+                    userId: userData.uid,
+                    deviceName: navigator.userAgent.split(')')[0].split('(')[1] || 'Perangkat Terdaftar',
+                    createdAt: serverTimestamp()
+                });
+
+                // Link ke Global User (Agar bisa dicari saat login biometrik)
+                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'biometric_map', credId), {
+                    internalUid: user.uid,
+                    loginId: userData.uid
+                });
+
+                toast("Biometrik Berhasil Didaftarkan!");
+                checkBiometricStatus();
+            }
+        } catch (err) {
+            console.error(err);
+            toast("Batal atau Gagal daftar biometrik");
+        }
+        hideLoader();
+    };
+
+    // 2. Login dengan Biometrik
+    window.loginWithBiometrics = async () => {
+        if (!window.PublicKeyCredential) return toast("Tidak didukung");
+        
+        try {
+            const challenge = new Uint8Array(32);
+            window.crypto.getRandomValues(challenge);
+
+            const assertion = await navigator.credentials.get({
+                publicKey: {
+                    challenge: challenge,
+                    timeout: 60000,
+                    userVerification: "required",
+                    rpId: window.location.hostname || "localhost"
+                }
+            });
+
+            if (assertion) {
+                const credId = btoa(String.fromCharCode(...new Uint8Array(assertion.rawId)));
+                showLoader();
+                
+                // Cari pemetaan biometrik di Firestore (Rule 1)
+                const mapRef = doc(db, 'artifacts', appId, 'public', 'data', 'biometric_map', credId);
+                const mapSnap = await getDoc(mapRef);
+
+                if (mapSnap.exists()) {
+                    const data = mapSnap.data();
+                    // Ambil data user asli
+                    const userRef = doc(db, 'artifacts', appId, 'public', 'data', 'users', data.loginId);
+                    const userSnap = await getDoc(userRef);
+                    
+                    if (userSnap.exists()) {
+                        userData = { uid: data.loginId, nama: userSnap.data().nama, role: userSnap.data().role };
+                        localStorage.setItem('edu_absen_session', JSON.stringify(userData));
+                        loginSuccess();
+                        toast("Login Biometrik Sukses!");
+                    }
+                } else {
+                    toast("Perangkat tidak dikenali. Login password dahulu.");
+                }
+            }
+        } catch (err) {
+            console.error(err);
+            toast("Gagal verifikasi biometrik");
+        }
+        hideLoader();
+    };
+
+    // --- STANDARD APP LOGIC ---
+
+    async function initAuth() {
+        try {
+            // Rule 3: Auth First
+            await signInAnonymously(auth);
+            onAuthStateChanged(auth, (u) => {
+                user = u;
+                if (u) checkSession();
+                else { showView('login'); hideLoader(); }
+            });
+        } catch (err) { toast("Firebase Error"); }
+    }
+
+    function checkSession() {
+        const saved = localStorage.getItem('edu_absen_session');
+        if (saved) {
+            userData = JSON.parse(saved);
+            loginSuccess();
+        } else {
+            showView('login');
+            hideLoader();
+        }
+    }
+
+    window.processLogin = async () => {
+        const uId = document.getElementById('login-user').value.toLowerCase().trim();
+        const uPass = document.getElementById('login-pass').value;
+
+        if(!uId || !uPass) return toast("Isi data login!");
+
+        showLoader();
+        const userRef = doc(db, 'artifacts', appId, 'public', 'data', 'users', uId);
+        const snap = await getDoc(userRef);
+
+        if (snap.exists() && snap.data().password === uPass) {
+            userData = { uid: uId, nama: snap.data().nama, role: snap.data().role };
+            localStorage.setItem('edu_absen_session', JSON.stringify(userData));
+            loginSuccess();
+        } else if (uId === 'admin' && uPass === 'admin123') {
+            userData = { uid: 'admin', nama: 'Administrator', role: 'Admin' };
+            localStorage.setItem('edu_absen_session', JSON.stringify(userData));
+            loginSuccess();
+        } else {
+            toast("Kredensial Salah");
+            hideLoader();
+        }
+    };
+
+    function loginSuccess() {
+        document.getElementById('header-app').classList.remove('hidden');
+        document.getElementById('bottom-nav').classList.remove('hidden');
+        document.getElementById('user-display-name').innerText = userData.nama;
+        document.getElementById('prof-nama').innerText = userData.nama;
+        document.getElementById('prof-id').innerText = userData.uid;
+        
+        checkBiometricStatus();
+        listenToAttendance();
+        switchTab('dashboard');
+        hideLoader();
+    }
+
+    async function checkBiometricStatus() {
+        if (!user) return;
+        const snap = await getDoc(doc(db, 'artifacts', appId, 'users', user.uid, 'security', 'biometric'));
+        const statusUi = document.getElementById('biometric-status-ui');
+        if (snap.exists()) {
+            statusUi.innerHTML = `<span class="text-[9px] font-black text-emerald-500 uppercase tracking-widest"><i class="fas fa-check-circle mr-1"></i> Biometrik Aktif</span>`;
+        }
+    }
+
+    window.handleLogout = () => {
+        localStorage.removeItem('edu_absen_session');
+        location.reload();
+    };
+
+    // --- ATTENDANCE & GPS ---
+
+    function listenToAttendance() {
+        if (!user) return;
+        // Rule 2: Simple query, filter in memory
+        const q = collection(db, 'artifacts', appId, 'public', 'data', 'logs');
+        onSnapshot(q, (snap) => {
+            const logs = [];
+            snap.forEach(d => { if(d.data().userId === userData.uid) logs.push(d.data()); });
+            logs.sort((a, b) => b.timestamp?.seconds - a.timestamp?.seconds);
+            
+            // Render UI
+            const list = document.getElementById('riwayat-list');
+            list.innerHTML = '';
+            logs.forEach(log => {
+                const date = log.timestamp?.toDate ? log.timestamp.toDate() : new Date();
+                const item = document.createElement('div');
+                item.className = "bg-white p-4 rounded-2xl border border-slate-50 flex justify-between items-center shadow-sm";
+                item.innerHTML = `
+                    <div class="flex items-center space-x-3">
+                        <div class="w-8 h-8 rounded-full flex items-center justify-center ${log.tipe === 'Masuk' ? 'bg-emerald-50 text-emerald-600' : 'bg-orange-50 text-orange-600'}">
+                            <i class="fas fa-${log.tipe === 'Masuk' ? 'door-open' : 'door-closed'} text-xs"></i>
+                        </div>
+                        <div>
+                            <p class="text-[10px] font-black text-slate-800 uppercase">${log.tipe}</p>
+                            <p class="text-[8px] font-bold text-slate-400">${date.toLocaleTimeString()} • ${date.toLocaleDateString()}</p>
+                        </div>
+                    </div>
+                `;
+                list.appendChild(item);
+            });
+            updateDash(logs);
+        }, (err) => console.error(err));
+    }
+
+    function updateDash(logs) {
+        const today = new Date().toDateString();
+        logs.forEach(l => {
+            const lD = l.timestamp?.toDate ? l.timestamp.toDate().toDateString() : today;
+            if (lD === today) {
+                const time = l.timestamp?.toDate ? l.timestamp.toDate().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '--:--';
+                if (l.tipe === 'Masuk') document.getElementById('dash-masuk').innerText = time;
+                if (l.tipe === 'Pulang') document.getElementById('dash-pulang').innerText = time;
+            }
+        });
+    }
+
+    window.doAbsen = async (tipe) => {
+        showLoader();
+        try {
+            const canvas = document.createElement('canvas');
+            const video = document.getElementById('video');
+            canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+            canvas.getContext('2d').drawImage(video, 0, 0);
+            
+            await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), {
+                userId: userData.uid,
+                tipe: tipe,
+                timestamp: serverTimestamp(),
+                photo: canvas.toDataURL('image/jpeg', 0.6)
+            });
+            toast(`Sukses Absen ${tipe}!`);
+            switchTab('dashboard');
+        } catch (e) { toast("Gagal Absen"); }
+        hideLoader();
+    };
+
+    // --- HELPER UI ---
+
+    window.switchTab = (id) => {
+        document.querySelectorAll('main > section').forEach(s => s.classList.add('hidden'));
+        document.getElementById('view-' + id).classList.remove('hidden');
+        document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.tab === id));
+        if (id === 'absen') startCam(); else stopCam();
+    };
+
+    function showView(id) {
+        document.querySelectorAll('main > section').forEach(s => s.classList.add('hidden'));
+        document.getElementById('view-' + id).classList.remove('hidden');
+    }
+
+    async function startCam() {
+        try {
+            videoStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+            document.getElementById('video').srcObject = videoStream;
+            watchGPS();
+        } catch (e) { toast("Kamera Tidak Aktif"); }
+    }
+
+    function stopCam() { if(videoStream) videoStream.getTracks().forEach(t => t.stop()); }
+
+    function watchGPS() {
+        navigator.geolocation.watchPosition(pos => {
+            const dist = calculateDist(pos.coords.latitude, pos.coords.longitude, officeLoc.lat, officeLoc.lng);
+            document.getElementById('gps-dist').innerText = `${Math.round(dist)} METER`;
+            const ok = dist <= officeLoc.radius;
+            document.getElementById('gps-status').innerText = ok ? "LOKASI VALID" : "DI LUAR RADIUS";
+            document.getElementById('gps-status').className = ok ? "text-[10px] font-black text-emerald-500" : "text-[10px] font-black text-red-500";
+            document.getElementById('btn-in').disabled = !ok;
+            document.getElementById('btn-out').disabled = !ok;
+            document.getElementById('btn-in').style.opacity = ok ? "1" : "0.3";
+            document.getElementById('btn-out').style.opacity = ok ? "1" : "0.3";
+        }, null, { enableHighAccuracy: true });
+    }
+
+    function calculateDist(l1, n1, l2, n2) {
+        const R = 6371e3;
+        const φ1 = l1 * Math.PI/180, φ2 = l2 * Math.PI/180, Δφ = (l2-l1) * Math.PI/180, Δλ = (n2-n1) * Math.PI/180;
+        const a = Math.sin(Δφ/2)**2 + Math.cos(φ1)*Math.cos(φ2)*Math.sin(Δλ/2)**2;
+        return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
+    }
+
+    function showLoader() { document.getElementById('loader').classList.remove('hidden'); }
+    function hideLoader() { document.getElementById('loader').classList.add('hidden'); }
+    function toast(m) {
+        const t = document.createElement('div');
+        t.className = "fixed bottom-24 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-6 py-3 rounded-2xl text-[10px] font-black z-[200000] shadow-2xl uppercase tracking-widest fade-in";
+        t.innerText = m;
+        document.body.appendChild(t);
+        setTimeout(() => t.remove(), 3000);
+    }
+
+    setInterval(() => {
+        const n = new Date();
+        document.getElementById('clock-label').innerText = n.toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'});
+        document.getElementById('date-label').innerText = n.toLocaleDateString('id-ID', {weekday:'short', day:'numeric', month:'short'}).toUpperCase();
+    }, 1000);
+
+    initAuth();
+</script>
+
+</body>
+</html>
